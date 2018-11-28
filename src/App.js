@@ -1,13 +1,15 @@
 import React, { Component } from 'react';
 import socketIOClient from 'socket.io-client';
 import './App.css';
-const endpoint = 'http://localhost:2017';
+const endpoint = 'https://chat-less-backend.herokuapp.com';
 
+let typing = false;
 class App extends Component {
   constructor(props) {
     super(props);
     this.chatBox = React.createRef();
     this.io = socketIOClient(endpoint);
+    this.username = window.localStorage.getItem('username');
     this.state = {
       message: '',
       busy: '',
@@ -17,39 +19,49 @@ class App extends Component {
   }
   componentDidMount() {
     this.io.on('newMessage', data => {
-      console.log({ data });
       this.setState(prev => ({
-        chatItems: [...prev.chatItems, data.message.message],
+        chatItems: [...prev.chatItems, { ...data }],
       }));
     });
     this.io.on('typing', data => {
       this.setState({
-        busy: data.typing.name,
+        busy: data.typing.name !== this.username ? data.typing.name : '',
       });
     });
   }
-  componentWillUnmount() {
-    clearTimeout(this.timeout);
-  }
+  cancelTimeout = () => {
+    typing = false;
+    this.io.emit('isTyping', { name: '' });
+  };
   sendMessage = () => {
     const { message } = this.state;
-    this.io.emit('sendMessage', { message });
+    if (message.trim() !== '') this.io.emit('sendMessage', { message });
     this.setState({ message: '' });
   };
   changeMessage = event => {
-    this.io.emit('isTyping', { name: 'Anshuman' });
-    this.timeout = setTimeout(this.io.emit('isTyping', { name: '' }), 4000);
+    if (typing === false) {
+      typing = true;
+      this.io.emit('isTyping', { name: this.username });
+      this.timeout = setTimeout(this.cancelTimeout, 1000);
+    } else {
+      clearTimeout(this.timeout);
+      this.timeout = setTimeout(this.cancelTimeout, 1000);
+    }
     this.setState({ message: event.target.value });
   };
   keyChange = event => {
     if (event.key === 'Enter') this.sendMessage();
+  };
+  getUsername = event => {
+    this.username = event.target.value;
+    window.localStorage.setItem('username', this.username);
   };
   open = () => {
     this.setState(prev => ({ open: !prev.open }));
   };
   render() {
     const { chatItems, open, busy } = this.state;
-    return (
+    return this.username ? (
       <div
         style={{
           display: 'flex',
@@ -71,6 +83,7 @@ class App extends Component {
           }}
         >
           <img
+            alt="menu"
             src={require('./images/hamburger.svg')}
             width="40px"
             style={{ cursor: 'pointer' }}
@@ -98,6 +111,8 @@ class App extends Component {
             flexGrow: 1,
             width: !open ? '100vw' : 'calc(100% - 300px)',
             boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
             transitionProperty: 'width',
             transition: open && '0.6s all',
             overflowY: 'scroll',
@@ -117,7 +132,27 @@ class App extends Component {
             {busy !== '' && busy + ' is typing...'}
           </p>
           {chatItems.length
-            ? chatItems.map((item, i) => <p key={i}>{item}</p>)
+            ? chatItems.map((item, i) => (
+                <p
+                  style={{
+                    maxWidth: 200,
+                    margin: 10,
+                    padding: '5px 20px',
+                    marginBottom: 0,
+                    alignSelf:
+                      this.io.id === item.message.id
+                        ? 'flex-end'
+                        : 'flex-start',
+                    wordWrap: 'break-word',
+                    background:
+                      this.io.id === item.message.id ? '#cac' : '#cca',
+                    borderRadius: 8,
+                  }}
+                  key={i}
+                >
+                  {item.message.data.message}
+                </p>
+              ))
             : 'No chat'}
         </div>
         <div
@@ -162,6 +197,51 @@ class App extends Component {
             Send
           </button>
         </div>
+      </div>
+    ) : (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          marginTop: '200px',
+          height: 200,
+          justifyContent: 'space-evenly',
+        }}
+      >
+        <h1>
+          Welcome to <i style={{ color: '#490' }}>ChatLess</i>
+        </h1>
+        <input
+          placeholder="Username"
+          style={{
+            margin: '2px 10px',
+            color: '#445',
+            flexGrow: 0,
+            fontSize: '14px',
+            boxSizing: 'border-box',
+            border: '2px solid #ccc',
+            borderRadius: '5px',
+            height: 40,
+            padding: '5px 10px',
+          }}
+          type="text"
+          onChange={this.getUsername}
+        />
+        <button
+          style={{
+            border: 'none',
+            fontSize: 18,
+            marginRight: 10,
+            height: 40,
+            borderRadius: 5,
+            width: 100,
+          }}
+          onClick={() => window.location.reload()}
+        >
+          {' '}
+          Submit
+        </button>
       </div>
     );
   }
