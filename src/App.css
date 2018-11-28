@@ -1,0 +1,6 @@
+.chatBox::-webkit-scrollbar {
+  width: 0;
+  height: 100px;
+  margin: 5px;
+  background-color: #ccc;
+}
